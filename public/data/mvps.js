@@ -14,7 +14,7 @@ export const MVP_DATABASE = [
     hp: 128000,
     cardBg: "#3b2a0c",
     accentColor: "#f59e0b",
-    icon: "🪲",
+    icon: "https://file5s.ratemyserver.net/mobs/1086.gif",
     svgSprite: "gtb"
   },
   {
