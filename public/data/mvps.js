@@ -14,7 +14,7 @@ export const MVP_DATABASE = [
     hp: 128000,
     cardBg: "#3b2a0c",
     accentColor: "#f59e0b",
-    icon: "data/icons/gtb.gif",
+    icon: "/data/icons/GoldenThiefBug.gif",
     svgSprite: "gtb"
   },
   {
@@ -31,7 +31,7 @@ export const MVP_DATABASE = [
     hp: 7700000,
     cardBg: "#450a0a",
     accentColor: "#ef4444",
-    icon: "🔥",
+    icon: "/data/icons/Ifrit.gif",
     svgSprite: "ifrit"
   },
   {
@@ -48,7 +48,7 @@ export const MVP_DATABASE = [
     hp: 1890000,
     cardBg: "#1e1b4b",
     accentColor: "#818cf8",
-    icon: "💀",
+    icon: "/data/icons/LordOfDeath.gif",
     svgSprite: "lord_of_death"
   },
   {
@@ -65,7 +65,7 @@ export const MVP_DATABASE = [
     hp: 640000,
     cardBg: "#0c4a6e",
     accentColor: "#38bdf8",
-    icon: "❄️",
+    icon: "/data/icons/StormyKnight.gif",
     svgSprite: "stormy_knight"
   },
   {
@@ -82,7 +82,7 @@ export const MVP_DATABASE = [
     hp: 520000,
     cardBg: "#31103f",
     accentColor: "#c084fc",
-    icon: "🦇",
+    icon: "/data/icons/Dracula.gif",
     svgSprite: "dracula"
   },
   {
@@ -99,7 +99,7 @@ export const MVP_DATABASE = [
     hp: 480000,
     cardBg: "#2e1002",
     accentColor: "#fb923c",
-    icon: "🐛",
+    icon: "/data/icons/Phreeoni.gif",
     svgSprite: "phreeoni"
   },
   {
@@ -116,7 +116,7 @@ export const MVP_DATABASE = [
     hp: 580000,
     cardBg: "#14532d",
     accentColor: "#4ade80",
-    icon: "🧌",
+    icon: "/data/icons/OrcHero.gif",
     svgSprite: "orc_hero"
   },
   {
@@ -133,7 +133,7 @@ export const MVP_DATABASE = [
     hp: 950000,
     cardBg: "#166534",
     accentColor: "#22c55e",
-    icon: "👺",
+    icon: "/data/icons/OrcLord.gif",
     svgSprite: "orc_lord"
   },
   {
@@ -150,7 +150,7 @@ export const MVP_DATABASE = [
     hp: 668000,
     cardBg: "#450a0a",
     accentColor: "#f87171",
-    icon: "🐐",
+    icon: "/data/icons/Baphomet.gif",
     svgSprite: "baphomet"
   },
   {
@@ -167,7 +167,7 @@ export const MVP_DATABASE = [
     hp: 420000,
     cardBg: "#134e4a",
     accentColor: "#2dd4bf",
-    icon: "🐝",
+    icon: "/data/icons/Mistress.gif",
     svgSprite: "mistress"
   },
   {
@@ -184,7 +184,7 @@ export const MVP_DATABASE = [
     hp: 790000,
     cardBg: "#3f2c06",
     accentColor: "#eab308",
-    icon: "🐜",
+    icon: "/data/icons/Maya.gif",
     svgSprite: "maya"
   },
   {
@@ -201,7 +201,7 @@ export const MVP_DATABASE = [
     hp: 510000,
     cardBg: "#361a06",
     accentColor: "#f97316",
-    icon: "𓀾",
+    icon: "/data/icons/Osiris.gif",
     svgSprite: "osiris"
   },
   {
@@ -218,7 +218,7 @@ export const MVP_DATABASE = [
     hp: 1220000,
     cardBg: "#451a03",
     accentColor: "#f59e0b",
-    icon: "👑",
+    icon: "/data/icons/AmonRa.gif",
     svgSprite: "amon_ra"
   },
   {
@@ -235,7 +235,7 @@ export const MVP_DATABASE = [
     hp: 850000,
     cardBg: "#0f172a",
     accentColor: "#94a3b8",
-    icon: "🗿",
+    icon: "/data/icons/TaoGunka.gif",
     svgSprite: "tao_gunka"
   },
   {
@@ -252,7 +252,7 @@ export const MVP_DATABASE = [
     hp: 310000,
     cardBg: "#431407",
     accentColor: "#f97316",
-    icon: "🐯",
+    icon: "/data/icons/Eddga.gif",
     svgSprite: "eddga"
   },
   {
@@ -269,7 +269,7 @@ export const MVP_DATABASE = [
     hp: 320000,
     cardBg: "#581c87",
     accentColor: "#c084fc",
-    icon: "🦊",
+    icon: "/data/icons/MoonlightFlower.gif",
     svgSprite: "moonlight"
   },
   {
@@ -286,7 +286,7 @@ export const MVP_DATABASE = [
     hp: 388000,
     cardBg: "#1e293b",
     accentColor: "#38bdf8",
-    icon: "🏴‍☠️",
+    icon: "/data/icons/Drake.gif",
     svgSprite: "drake"
   },
   {
@@ -303,7 +303,7 @@ export const MVP_DATABASE = [
     hp: 720000,
     cardBg: "#09090b",
     accentColor: "#a855f7",
-    icon: "🧙‍♂️",
+    icon: "/data/icons/DarkLord.gif",
     svgSprite: "dark_lord"
   },
   {
@@ -320,7 +320,7 @@ export const MVP_DATABASE = [
     hp: 1320000,
     cardBg: "#064e3b",
     accentColor: "#10b981",
-    icon: "🐢",
+    icon: "/data/icons/TurtleGeneral.gif",
     svgSprite: "turtle_general"
   },
   {
@@ -337,7 +337,7 @@ export const MVP_DATABASE = [
     hp: 1150000,
     cardBg: "#713f12",
     accentColor: "#facc15",
-    icon: "𓂀",
+    icon: "/data/icons/Pharaoh.gif",
     svgSprite: "pharaoh"
   },
   {
@@ -354,7 +354,7 @@ export const MVP_DATABASE = [
     hp: 620000,
     cardBg: "#172554",
     accentColor: "#60a5fa",
-    icon: "⚔️",
+    icon: "/data/icons/Doppelganger.gif",
     svgSprite: "doppelganger"
   },
   {
@@ -371,7 +371,7 @@ export const MVP_DATABASE = [
     hp: 3450000,
     cardBg: "#0369a1",
     accentColor: "#38bdf8",
-    icon: "🧊",
+    icon: "/data/icons/Ktullanux.gif",
     svgSprite: "ktullanux"
   },
   {
@@ -389,7 +389,7 @@ export const MVP_DATABASE = [
     cardBg: "#fafaf9",
     textColor: "#0f172a",
     accentColor: "#eab308",
-    icon: "👼",
+    icon: "/data/icons/ValkyrieRandgris.gif",
     svgSprite: "valkyrie"
   },
   {
@@ -406,7 +406,7 @@ export const MVP_DATABASE = [
     hp: 6660000,
     cardBg: "#18181b",
     accentColor: "#ef4444",
-    icon: "🪰",
+    icon: "/data/icons/Beelzebub.gif",
     svgSprite: "beelzebub"
   },
   {
@@ -423,7 +423,7 @@ export const MVP_DATABASE = [
     hp: 1080000,
     cardBg: "#27272a",
     accentColor: "#a1a1aa",
-    icon: "🐺",
+    icon: "/data/icons/Atroce.gif",
     svgSprite: "atroce"
   },
   {
@@ -440,7 +440,7 @@ export const MVP_DATABASE = [
     hp: 1850000,
     cardBg: "#0f172a",
     accentColor: "#06b6d4",
-    icon: "🤖",
+    icon: "/data/icons/KielD-01.gif",
     svgSprite: "kiel"
   },
   {
@@ -457,7 +457,7 @@ export const MVP_DATABASE = [
     hp: 1420000,
     cardBg: "#292524",
     accentColor: "#f97316",
-    icon: "⚙️",
+    icon: "/data/icons/RSX0806.gif",
     svgSprite: "rsx"
   },
   {

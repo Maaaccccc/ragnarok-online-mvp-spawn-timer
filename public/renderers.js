@@ -95,24 +95,30 @@ export function renderMvpAvatar(mvp) {
   const accent = mvp.accentColor || "#f59e0b";
   const icon = mvp.icon || "👑";
 
+  // Check if the icon string is a file path (starts with / or ends with image extensions)
+  const isImagePath = icon.startsWith('/') || icon.startsWith('http') || /\.(gif|png|jpg|jpeg|webp|svg)$/i.test(icon);
+
+  // Render an <img> tag if it's an image path, otherwise render as text/emoji inside <span>
+  const iconContent = isImagePath
+    ? `<img src="${icon}" alt="${mvp.name}" class="w-12 h-12 object-contain drop-shadow-[0_4px_8px_rgba(0,0,0,0.8)] transform group-hover:scale-110 transition-transform duration-300 select-none pointer-events-none" />`
+    : `<span class="text-3xl sm:text-4xl drop-shadow-[0_4px_8px_rgba(0,0,0,0.8)] transform group-hover:scale-110 transition-transform duration-300 select-none">${icon}</span>`;
+
   return `
     <div class="relative w-16 h-16 sm:w-20 sm:h-20 rounded-xl flex items-center justify-center shadow-lg border border-amber-500/30 overflow-hidden group shrink-0" style="background: radial-gradient(circle at center, ${accent}33 0%, ${bg} 100%);">
-      <div class="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent"></div>
+      <div class="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent pointer-events-none"></div>
       
       <!-- Crown Badge for MVP -->
-      <div class="absolute top-1 left-1 text-[10px] bg-amber-500/80 text-black font-black px-1 rounded shadow">
+      <div class="absolute top-1 left-1 text-[10px] bg-amber-500/80 text-black font-black px-1 rounded shadow z-10">
         MVP
       </div>
 
       <!-- Level Badge -->
-      <div class="absolute bottom-1 right-1 text-[9px] bg-black/80 text-amber-300 font-mono px-1 rounded border border-amber-500/30">
+      <div class="absolute bottom-1 right-1 text-[9px] bg-black/80 text-amber-300 font-mono px-1 rounded border border-amber-500/30 z-10">
         Lv.${mvp.level}
       </div>
 
-      <!-- Boss Emoji / Avatar Icon with shadow -->
-      <span class="text-3xl sm:text-4xl drop-shadow-[0_4px_8px_rgba(0,0,0,0.8)] transform group-hover:scale-110 transition-transform duration-300 select-none">
-        ${icon}
-      </span>
+      <!-- Boss Image or Emoji -->
+      ${iconContent}
     </div>
   `;
 }
