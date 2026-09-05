@@ -474,7 +474,7 @@ export const MVP_DATABASE = [
     hp: 620000,
     cardBg: "#065f46",
     accentColor: "#34d399",
-    icon: "🍌",
+    icon: "/data/icons/LadyTanee.gif",
     svgSprite: "lady_tanee"
   }
 ];
