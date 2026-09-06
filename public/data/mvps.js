@@ -3,8 +3,8 @@ export const MVP_DATABASE = [
   {
     id: "gtb",
     name: "Golden Thief Bug",
-    map: "prt_sewb1",
-    location: "Prontera Sewer B1",
+    map: "prt_sewb4",
+    location: "Prontera Sewer B4",
     coordinates: "35, 140",
     respawnMinutes: 60,
     level: 58,
@@ -33,7 +33,7 @@ export const MVP_DATABASE = [
     accentColor: "#ef4444",
     icon: "/data/icons/Ifrit.gif",
     svgSprite: "ifrit"
-  },
+  },/*
   {
     id: "lord_of_death",
     name: "Lord of Death",
@@ -50,7 +50,7 @@ export const MVP_DATABASE = [
     accentColor: "#818cf8",
     icon: "/data/icons/LordOfDeath.gif",
     svgSprite: "lord_of_death"
-  },
+  },*/
   {
     id: "stormy_knight",
     name: "Stormy Knight",
@@ -476,6 +476,23 @@ export const MVP_DATABASE = [
     accentColor: "#34d399",
     icon: "/data/icons/LadyTanee.gif",
     svgSprite: "lady_tanee"
+  },
+  {
+    id: "vesper",
+    name: "Vesper",
+    map: "jupe_core",
+    location: "Jupe Core",
+    coordinates: "150, 150",
+    respawnMinutes: 130,
+    level: 80,
+    element: "Unkown",
+    race: "Unkown",
+    size: "Large",
+    hp: 620000,
+    cardBg: "#7b7c7c",
+    accentColor: "#BCBCBC",
+    icon: "/data/icons/Unknown.gif",
+    svgSprite: "vesper"
   }
 ];
 

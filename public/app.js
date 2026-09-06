@@ -3,25 +3,88 @@ import { createRoot } from "react-dom/client";
 import {
   Clock, Plus, Search, Filter, Volume2, VolumeX, Bell, BellOff,
   Sun, Moon, Download, Upload, Star, MapPin, RefreshCw, Edit3, Trash2,
-  AlertTriangle, Shield, CheckCircle2, ChevronDown, ExternalLink,
-  BookOpen, History, Flame, Copy, Sparkles, X, Play, RotateCcw
+  AlertTriangle, Shield, CheckCircle2, ChevronDown, BookOpen, History,
+  Flame, Copy, Sparkles, X, Play, RotateCcw, Skull, Calendar, ArrowRight
 } from "lucide-react";
 import confetti from "canvas-confetti";
 
 import { MVP_DATABASE, ELEMENT_COLORS } from "./data/mvps.js";
 import { playSpawnSound, playWarningSound } from "./sound.js";
-import { renderMapSvg, renderMvpAvatar } from "./renderers.js";
+import { renderMvpAvatar } from "./renderers.js";
 
 // LocalStorage Keys
-const LS_TIMERS_KEY = "ro_mvp_timers_v2";
-const LS_FAVORITES_KEY = "ro_mvp_favorites_v2";
-const LS_HISTORY_KEY = "ro_mvp_history_v2";
-const LS_SETTINGS_KEY = "ro_mvp_settings_v2";
+const LS_TIMERS_KEY = "ro_mvp_timers_v3";
+const LS_FAVORITES_KEY = "ro_mvp_favorites_v3";
+const LS_HISTORY_KEY = "ro_mvp_history_v3";
+const LS_SETTINGS_KEY = "ro_mvp_settings_v3";
+
+/**
+ * Utility: Parse exact kill time string (e.g. "13:00", "01:30", "1:30 pm") into kill timestamp
+ */
+function parseKillTimeToTimestamp(inputStr, referenceTimestamp = Date.now()) {
+  if (!inputStr) return null;
+  const str = inputStr.trim().toLowerCase();
+
+  let hours = null;
+  let minutes = null;
+  let seconds = 0;
+
+  const isPm = str.includes("pm");
+  const isAm = str.includes("am");
+  const cleanStr = str.replace(/(am|pm)/g, "").trim();
+
+  if (cleanStr.includes(":")) {
+    const parts = cleanStr.split(":").map(p => parseInt(p, 10));
+    if (!isNaN(parts[0]) && !isNaN(parts[1])) {
+      hours = parts[0];
+      minutes = parts[1];
+      if (parts[2] !== undefined && !isNaN(parts[2])) {
+        seconds = parts[2];
+      }
+    }
+  } else if (/^\d{1,4}$/.test(cleanStr)) {
+    const num = parseInt(cleanStr, 10);
+    if (num >= 0 && num < 24) {
+      hours = num;
+      minutes = 0;
+    } else if (cleanStr.length === 3) {
+      hours = parseInt(cleanStr[0], 10);
+      minutes = parseInt(cleanStr.slice(1), 10);
+    } else if (cleanStr.length === 4) {
+      hours = parseInt(cleanStr.slice(0, 2), 10);
+      minutes = parseInt(cleanStr.slice(2), 10);
+    }
+  }
+
+  if (hours === null || minutes === null || isNaN(hours) || isNaN(minutes)) {
+    return null;
+  }
+
+  if (isPm && hours < 12) hours += 12;
+  if (isAm && hours === 12) hours = 0;
+
+  if (hours < 0 || hours > 23 || minutes < 0 || minutes > 59 || seconds < 0 || seconds > 59) {
+    return null;
+  }
+
+  const d = new Date(referenceTimestamp);
+  d.setHours(hours, minutes, seconds, 0);
+
+  let killTime = d.getTime();
+
+  // Handle midnight roll-over: If kill time is in the future relative to referenceTimestamp by > 2 mins,
+  // it means the kill happened yesterday
+  if (killTime > referenceTimestamp + 2 * 60 * 1000) {
+    killTime -= 24 * 60 * 60 * 1000;
+  }
+
+  return killTime;
+}
 
 /**
  * Utility: Parse time input (e.g. "42:15", "1:15:00", "42m 15s", "42") into milliseconds
  */
-function parseTimeToMs(inputStr) {
+function parseTimeToMs(inputStr, defaultType = 'minutes') {
   if (!inputStr) return null;
   const str = inputStr.trim().toLowerCase();
 
@@ -37,22 +100,25 @@ function parseTimeToMs(inputStr) {
     }
   }
 
-  // Match text formats like "42m 15s" or "1h 30m" or "42m"
+  // Match text formats like "3h 30m" or "3h" or "45m" or "45s" or "3 hrs"
   let totalSeconds = 0;
-  const hourMatch = str.match(/(\d+)\s*h/);
-  const minMatch = str.match(/(\d+)\s*m/);
-  const secMatch = str.match(/(\d+)\s*s/);
+  const hourMatch = str.match(/(\d+(?:\.\d+)?)\s*(?:h|hr|hrs|hour|hours)/);
+  const minMatch = str.match(/(\d+(?:\.\d+)?)\s*(?:m|min|mins|minute|minutes)/);
+  const secMatch = str.match(/(\d+(?:\.\d+)?)\s*(?:s|sec|secs|second|seconds)/);
 
   if (hourMatch || minMatch || secMatch) {
-    if (hourMatch) totalSeconds += parseInt(hourMatch[1], 10) * 3600;
-    if (minMatch) totalSeconds += parseInt(minMatch[1], 10) * 60;
-    if (secMatch) totalSeconds += parseInt(secMatch[1], 10);
-    return totalSeconds * 1000;
+    if (hourMatch) totalSeconds += parseFloat(hourMatch[1]) * 3600;
+    if (minMatch) totalSeconds += parseFloat(minMatch[1]) * 60;
+    if (secMatch) totalSeconds += parseFloat(secMatch[1]);
+    return Math.floor(totalSeconds * 1000);
   }
 
-  // Pure number assumes minutes
+  // Pure number handling based on default type ('hours' or 'minutes')
   const num = parseFloat(str);
   if (!isNaN(num)) {
+    if (defaultType === 'hours') {
+      return Math.floor(num * 3600 * 1000);
+    }
     return Math.floor(num * 60 * 1000);
   }
 
@@ -84,6 +150,17 @@ function formatClockTime(timestamp) {
   if (!timestamp) return "--:--:--";
   const date = new Date(timestamp);
   return date.toLocaleTimeString([], { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+}
+
+/**
+ * Format minutes into friendly human text (e.g. 240 mins -> "4h 00m", 60 mins -> "1h 00m")
+ */
+function formatRespawnText(minutes) {
+  if (!minutes) return "0m";
+  if (minutes < 60) return `${minutes}m`;
+  const hrs = Math.floor(minutes / 60);
+  const mins = minutes % 60;
+  return mins > 0 ? `${hrs}h ${mins}m` : `${hrs}h`;
 }
 
 /**
@@ -234,11 +311,11 @@ function App() {
   // Modals
   const [addModalOpen, setAddModalOpen] = useState(false);
   const [editingMvp, setEditingMvp] = useState(null); // MVP object for timer modal
-  const [mapModalMvp, setMapModalMvp] = useState(null); // MVP object for map modal
+  const [initialModalTab, setInitialModalTab] = useState('killed'); // 'killed' or 'mirror'
   const [dbModalOpen, setDbModalOpen] = useState(false);
   const [ioModalOpen, setIoModalOpen] = useState(false);
 
-  // Sound Notification Tracking (prevent continuous repeating sound every second)
+  // Sound Notification Tracking (prevent repeating sound every second)
   const notifiedSpawnsRef = useRef(new Set());
 
   // Save State Persistence
@@ -305,7 +382,7 @@ function App() {
           // Browser Notification
           if (settings.browserNotif && "Notification" in window && Notification.permission === "granted") {
             new Notification(`🔥 ${mvpName} SPAWNED NOW!`, {
-              body: `Map: ${mvp?.map || ''} - Teleport immediately!`,
+              body: `Map Location: ${mvp?.map || ''}`,
               icon: '/favicon.ico'
             });
           }
@@ -340,7 +417,7 @@ function App() {
     const mvp = MVP_DATABASE.find(m => m.id === mvpId);
     if (!mvp) return;
 
-    const durationMs = remainingMs !== null ? remainingMs : mvp.respawnMinutes * 60 * 1000;
+    const durationMs = remainingMs !== null ? Math.max(0, remainingMs) : mvp.respawnMinutes * 60 * 1000;
     const totalMs = customTotalDuration || mvp.respawnMinutes * 60 * 1000;
     const spawnTimestamp = Date.now() + durationMs;
 
@@ -470,7 +547,7 @@ function App() {
 
   return (
     <div className={`min-h-screen ${settings.darkMode ? 'dark bg-[#0b0f19] text-gray-100' : 'bg-slate-50 text-slate-900'} transition-colors duration-300`}>
-      {/* Top Gothic Header Banner */}
+      {/* Top Header Banner */}
       <header className="sticky top-0 z-30 border-b border-amber-500/30 bg-[#0b0f19]/90 backdrop-blur-md px-4 py-3 shadow-xl">
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
           
@@ -485,7 +562,7 @@ function App() {
                   Ragnarok Online MVP Timer
                 </h1>
                 <p className="text-xs text-amber-500/80 font-mono flex items-center gap-1">
-                  <span>Convex Mirror Sync</span> • <Clock className="w-3 h-3 inline" /> {new Date(now).toLocaleTimeString()}
+                  <span>Convex Mirror & Kill Time Tracker</span> • <Clock className="w-3 h-3 inline" /> {new Date(now).toLocaleTimeString()}
                 </p>
               </div>
             </div>
@@ -493,7 +570,7 @@ function App() {
             {/* Quick Stats Summary */}
             <div className="flex md:hidden items-center gap-2 bg-amber-500/10 border border-amber-500/30 px-3 py-1 rounded-full text-xs font-mono text-amber-300">
               <Flame className="w-3.5 h-3.5 text-amber-500 animate-pulse" />
-              <span>{activeTimerList.length} Timers Active</span>
+              <span>{activeTimerList.length} Active</span>
             </div>
           </div>
 
@@ -566,6 +643,7 @@ function App() {
             <button
               onClick={() => {
                 setEditingMvp(null);
+                setInitialModalTab('killed');
                 setAddModalOpen(true);
               }}
               className="px-4 py-2 rounded-xl gold-gradient-bg text-black font-bold text-xs sm:text-sm flex items-center gap-1.5 shadow-lg shadow-amber-500/20 hover:scale-105 transition-all"
@@ -601,15 +679,16 @@ function App() {
                     </span>
                   </div>
 
+                  {/* Clean Map Location Identifier (e.g. prt_sewb1) */}
                   <p className="text-sm text-slate-300 flex items-center gap-2 mt-1">
                     <MapPin className="w-4 h-4 text-amber-400 shrink-0" />
                     <span className="font-semibold text-amber-200">{soonestMvp.mvp.location}</span>
-                    <span className="text-slate-400 font-mono">({soonestMvp.mvp.map})</span>
+                    <span className="text-amber-400/90 font-mono bg-slate-950/80 px-2 py-0.5 rounded border border-amber-500/30 font-bold">{soonestMvp.mvp.map}</span>
                   </p>
 
                   <div className="flex items-center gap-3 mt-2 text-xs font-mono text-slate-400">
                     <span>Spawn Time: <strong className="text-slate-200">{formatClockTime(soonestMvp.spawnTimestamp)}</strong></span>
-                    <span>Respawn: <strong className="text-slate-200">{soonestMvp.mvp.respawnMinutes}m</strong></span>
+                    <span>Respawn: <strong className="text-slate-200">{formatRespawnText(soonestMvp.mvp.respawnMinutes)}</strong></span>
                   </div>
                 </div>
               </div>
@@ -620,10 +699,14 @@ function App() {
 
                 <div className="flex flex-col gap-2">
                   <button
-                    onClick={() => setMapModalMvp(soonestMvp.mvp)}
+                    onClick={() => {
+                      setEditingMvp(soonestMvp.mvp);
+                      setInitialModalTab('killed');
+                      setAddModalOpen(true);
+                    }}
                     className="px-3 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-300 text-xs font-semibold flex items-center gap-1.5 transition-all"
                   >
-                    <MapPin className="w-3.5 h-3.5" /> View Map
+                    <Skull className="w-3.5 h-3.5 text-amber-400" /> Log Killed Time
                   </button>
                   <button
                     onClick={() => handleResetTimer(soonestMvp.mvp.id)}
@@ -675,7 +758,7 @@ function App() {
               <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
               <input
                 type="text"
-                placeholder="Search MVP name, map ID (e.g. prt_sewb1)..."
+                placeholder="Search MVP name, map (e.g. prt_sewb1)..."
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
                 className="w-full pl-9 pr-8 py-2 rounded-xl bg-slate-900/80 border border-slate-800 text-xs sm:text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-amber-500/60 transition-all"
@@ -746,7 +829,7 @@ function App() {
                 <option value="all">All Respawn Times</option>
                 <option value="<60">&lt; 60 Mins</option>
                 <option value="60-120">60 - 120 Mins</option>
-                <option value=">120">&gt; 120 Mins</option>
+                <option value=">120">&gt; 120 Mins (&gt;2 hrs)</option>
               </select>
             </div>
 
@@ -838,26 +921,20 @@ function App() {
 
                     </div>
 
-                    {/* Map & Coordinates Row */}
-                    <div className="mt-3 p-2.5 rounded-xl bg-slate-900/60 border border-slate-800/80 flex items-center justify-between text-xs">
-                      <div className="flex items-center gap-2 overflow-hidden">
-                        <div
-                          className="w-10 h-10 shrink-0 cursor-pointer hover:scale-105 transition-transform"
-                          onClick={() => setMapModalMvp(mvp)}
-                          dangerouslySetInnerHTML={{ __html: renderMapSvg(mvp.map, mvp.name, mvp.coordinates, false) }}
-                        />
-                        <div className="truncate">
-                          <p className="font-semibold text-slate-200 truncate">{mvp.location}</p>
-                          <p className="text-[11px] font-mono text-amber-400/80">{mvp.map} ({mvp.coordinates})</p>
+                    {/* Map Location Badge (Only Map Name/ID e.g. prt_sewb1, NO map images or coordinates) */}
+                    <div className="mt-3 p-2.5 rounded-xl bg-slate-900/80 border border-slate-800/80 flex items-center justify-between text-xs">
+                      <div className="flex items-center gap-2">
+                        <MapPin className="w-4 h-4 text-amber-400 shrink-0" />
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-semibold text-slate-200">{mvp.location}</span>
+                          <span className="text-amber-400 font-mono font-bold bg-slate-950 px-2 py-0.5 rounded border border-amber-500/30 text-[11px]">
+                            {mvp.map}
+                          </span>
                         </div>
                       </div>
-
-                      <button
-                        onClick={() => setMapModalMvp(mvp)}
-                        className="px-2 py-1 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 text-[11px] font-medium shrink-0 transition-colors flex items-center gap-1"
-                      >
-                        <MapPin className="w-3 h-3" /> Map
-                      </button>
+                      <span className="text-[11px] text-slate-400 font-mono shrink-0">
+                        {formatRespawnText(mvp.respawnMinutes)}
+                      </span>
                     </div>
                   </div>
 
@@ -872,7 +949,7 @@ function App() {
                             Spawn: <strong className="text-slate-200">{formatClockTime(timer.spawnTimestamp)}</strong>
                           </p>
                           <p className="text-slate-500">
-                            Respawn: <strong className="text-slate-300">{mvp.respawnMinutes}m</strong>
+                            Respawn: <strong className="text-slate-300">{formatRespawnText(mvp.respawnMinutes)}</strong>
                           </p>
                           {msRemaining <= 0 && (
                             <span className="inline-block px-2 py-0.5 rounded bg-red-600 text-white font-black text-[10px] animate-pulse">
@@ -884,25 +961,42 @@ function App() {
                     ) : (
                       <div className="w-full text-center py-2">
                         <p className="text-xs text-slate-400 font-mono">Timer Not Running</p>
-                        <p className="text-[11px] text-amber-500/80 mt-0.5">Respawn: {mvp.respawnMinutes} minutes</p>
+                        <p className="text-[11px] text-amber-500/80 mt-0.5">Respawn: {formatRespawnText(mvp.respawnMinutes)}</p>
                       </div>
                     )}
                   </div>
 
-                  {/* Card Action Buttons */}
-                  <div className="grid grid-cols-4 gap-2 pt-1 border-t border-slate-800/80">
+                  {/* Quick Kill Time & Convex Input Buttons */}
+                  <div className="grid grid-cols-2 gap-2">
                     <button
                       onClick={() => {
                         setEditingMvp(mvp);
+                        setInitialModalTab('killed');
                         setAddModalOpen(true);
                       }}
-                      className="py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-300 text-xs font-semibold flex items-center justify-center gap-1 transition-all"
-                      title="Set custom Convex Mirror remaining time"
+                      className="py-1.5 px-2 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-300 text-xs font-semibold flex items-center justify-center gap-1 transition-all"
+                      title="Set timer by entering exact time MVP was killed (e.g. killed at 13:00)"
                     >
-                      <Clock className="w-3.5 h-3.5" />
-                      <span>{timer ? 'Edit' : 'Set'}</span>
+                      <Skull className="w-3.5 h-3.5 text-amber-400" />
+                      <span>When Killed?</span>
                     </button>
 
+                    <button
+                      onClick={() => {
+                        setEditingMvp(mvp);
+                        setInitialModalTab('mirror');
+                        setAddModalOpen(true);
+                      }}
+                      className="py-1.5 px-2 rounded-lg bg-indigo-950/40 hover:bg-indigo-900/50 border border-indigo-700/40 text-indigo-300 text-xs font-semibold flex items-center justify-center gap-1 transition-all"
+                      title="Set timer by entering Convex Mirror remaining time (MM:SS)"
+                    >
+                      <Clock className="w-3.5 h-3.5 text-indigo-400" />
+                      <span>Convex Mirror...</span>
+                    </button>
+                  </div>
+
+                  {/* Card Action Buttons */}
+                  <div className="grid grid-cols-3 gap-2 pt-1 border-t border-slate-800/80">
                     <button
                       onClick={() => handleResetTimer(mvp.id)}
                       className="py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold flex items-center justify-center gap-1 transition-all"
@@ -915,7 +1009,7 @@ function App() {
                     <button
                       onClick={() => handleStartTimer(mvp.id, mvp.respawnMinutes * 60 * 1000)}
                       className="py-1.5 rounded-lg bg-emerald-950/60 hover:bg-emerald-900/60 border border-emerald-700/50 text-emerald-300 text-xs font-semibold flex items-center justify-center gap-1 transition-all"
-                      title="Quick Start Timer"
+                      title="Quick Start Full Timer"
                     >
                       <Play className="w-3.5 h-3.5 fill-emerald-300" />
                       <span>Start</span>
@@ -982,6 +1076,7 @@ function App() {
       {addModalOpen && (
         <AddEditTimerModal
           mvp={editingMvp}
+          initialTab={initialModalTab}
           onClose={() => {
             setAddModalOpen(false);
             setEditingMvp(null);
@@ -994,27 +1089,20 @@ function App() {
         />
       )}
 
-      {/* 2. Map Preview Modal */}
-      {mapModalMvp && (
-        <MapPreviewModal
-          mvp={mapModalMvp}
-          onClose={() => setMapModalMvp(null)}
-        />
-      )}
-
-      {/* 3. MVP Database Modal */}
+      {/* 2. MVP Database Modal */}
       {dbModalOpen && (
         <MvpDatabaseModal
           onClose={() => setDbModalOpen(false)}
           onSelectMvp={(mvp) => {
             setDbModalOpen(false);
             setEditingMvp(mvp);
+            setInitialModalTab('killed');
             setAddModalOpen(true);
           }}
         />
       )}
 
-      {/* 4. Import / Export JSON Modal */}
+      {/* 3. Import / Export JSON Modal */}
       {ioModalOpen && (
         <ImportExportModal
           timers={timers}
@@ -1034,43 +1122,143 @@ function App() {
 
 /**
  * Add / Edit Timer Modal Component
+ * Supports:
+ * - Tab 1: When was this killed? (Enter exact kill time e.g. 13:00 -> calculates spawn based on kill time + cooldown)
+ * - Tab 2: Convex Mirror Time Remaining (e.g. 42:15)
+ * - Custom Respawn Duration override (e.g. 2 hrs instead of default 60m)
  */
-function AddEditTimerModal({ mvp, onClose, onSubmit }) {
+function AddEditTimerModal({ mvp, initialTab = 'killed', onClose, onSubmit }) {
   const [selectedMvpId, setSelectedMvpId] = useState(mvp ? mvp.id : MVP_DATABASE[0].id);
-  const [timeInput, setTimeInput] = useState("");
-  const [errorMsg, setErrorMsg] = useState("");
+  const [activeTab, setActiveTab] = useState(initialTab); // 'killed' or 'mirror'
+  
+  // Current time helper string "HH:MM"
+  const getNowTimeString = () => {
+    const d = new Date();
+    const h = String(d.getHours()).padStart(2, '0');
+    const m = String(d.getMinutes()).padStart(2, '0');
+    return `${h}:${m}`;
+  };
 
+  // Tab 1: Exact Kill Time State
+  const [exactKillTime, setExactKillTime] = useState("");
+
+  // Tab 2: Convex Mirror Remaining Time State
+  const [mirrorInput, setMirrorInput] = useState("");
+
+  // Custom Respawn Duration (defaults to official MVP respawn)
   const currentMvp = useMemo(() => {
     return MVP_DATABASE.find(m => m.id === selectedMvpId) || MVP_DATABASE[0];
   }, [selectedMvpId]);
 
+  const [customRespawnMins, setCustomRespawnMins] = useState(currentMvp.respawnMinutes);
+  const [errorMsg, setErrorMsg] = useState("");
+
+  // Update custom respawn when selected MVP changes
+  useEffect(() => {
+    setCustomRespawnMins(currentMvp.respawnMinutes);
+    setErrorMsg("");
+  }, [currentMvp]);
+
+  // Live calculation preview for "When was this killed?" mode
+  const exactKillCalculation = useMemo(() => {
+    if (!exactKillTime) return null;
+    const killTimestamp = parseKillTimeToTimestamp(exactKillTime);
+    if (!killTimestamp) return null;
+
+    const currentNow = Date.now();
+    const timeElapsedMs = currentNow - killTimestamp;
+    const totalRespawnMs = customRespawnMins * 60 * 1000;
+    const targetSpawnTimestamp = killTimestamp + totalRespawnMs;
+    const remainingMs = targetSpawnTimestamp - currentNow;
+
+    return {
+      killTimestamp,
+      timeElapsedMs,
+      targetSpawnTimestamp,
+      remainingMs,
+      totalRespawnMs,
+      alreadySpawned: remainingMs <= 0
+    };
+  }, [exactKillTime, customRespawnMins]);
+
+  // Live calculation preview for "Convex Mirror" mode
+  const mirrorCalculation = useMemo(() => {
+    if (!mirrorInput) return null;
+    const remainingMs = parseTimeToMs(mirrorInput, 'minutes');
+    if (remainingMs === null || remainingMs < 0) return null;
+
+    const totalRespawnMs = customRespawnMins * 60 * 1000;
+    return {
+      remainingMs,
+      totalRespawnMs
+    };
+  }, [mirrorInput, customRespawnMins]);
+
+  // Helper generator for Quick Preset Kill Times
+  const quickTimePresets = useMemo(() => {
+    const nowTs = Date.now();
+    const getFormattedTimeAgo = (minsAgo) => {
+      const d = new Date(nowTs - minsAgo * 60 * 1000);
+      const h = String(d.getHours()).padStart(2, '0');
+      const m = String(d.getMinutes()).padStart(2, '0');
+      return `${h}:${m}`;
+    };
+
+    return [
+      { label: "Now", timeStr: getFormattedTimeAgo(0) },
+      { label: "15m ago", timeStr: getFormattedTimeAgo(15) },
+      { label: "30m ago", timeStr: getFormattedTimeAgo(30) },
+      { label: "1h ago", timeStr: getFormattedTimeAgo(60) },
+      { label: "2h ago", timeStr: getFormattedTimeAgo(120) },
+      { label: "3h ago", timeStr: getFormattedTimeAgo(180) },
+    ];
+  }, []);
+
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (!timeInput) {
-      // Default to full respawn duration if input empty
-      onSubmit(currentMvp.id, currentMvp.respawnMinutes * 60 * 1000);
-      return;
-    }
+    const totalRespawnMs = customRespawnMins * 60 * 1000;
 
-    const ms = parseTimeToMs(timeInput);
-    if (ms === null || ms < 0) {
-      setErrorMsg("Invalid time format! Use MM:SS (e.g. 42:15) or minutes (e.g. 42)");
-      return;
-    }
+    if (activeTab === 'killed') {
+      if (!exactKillTime) {
+        // Default to full respawn if blank
+        onSubmit(currentMvp.id, totalRespawnMs, totalRespawnMs);
+        return;
+      }
 
-    onSubmit(currentMvp.id, ms);
+      if (!exactKillCalculation || exactKillCalculation.killTimestamp === null) {
+        setErrorMsg("Invalid time format! Enter exact kill time e.g. 13:00 or 1:00 PM.");
+        return;
+      }
+
+      const remainingMs = Math.max(0, exactKillCalculation.remainingMs);
+      onSubmit(currentMvp.id, remainingMs, totalRespawnMs);
+
+    } else {
+      // Convex Mirror Mode
+      if (!mirrorInput) {
+        onSubmit(currentMvp.id, totalRespawnMs, totalRespawnMs);
+        return;
+      }
+
+      if (!mirrorCalculation || mirrorCalculation.remainingMs === null) {
+        setErrorMsg("Invalid Convex Mirror format! Use MM:SS (e.g. 42:15) or minutes (e.g. 42).");
+        return;
+      }
+
+      onSubmit(currentMvp.id, mirrorCalculation.remainingMs, totalRespawnMs);
+    }
   };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
-      <div className="relative w-full max-w-md rounded-2xl ro-card p-6 border-2 border-amber-500/50 bg-[#0b0f19] shadow-2xl space-y-5">
+      <div className="relative w-full max-w-lg rounded-2xl ro-card p-6 border-2 border-amber-500/50 bg-[#0b0f19] shadow-2xl space-y-5">
         
         {/* Header */}
         <div className="flex items-center justify-between border-b border-amber-500/30 pb-3">
           <div className="flex items-center gap-2">
             <Clock className="w-5 h-5 text-amber-400" />
             <h2 className="text-lg font-bold text-amber-300">
-              {mvp ? `Set Timer: ${mvp.name}` : 'Add Convex Mirror Timer'}
+              {mvp ? `Set Timer: ${mvp.name}` : 'Set MVP Respawn Timer'}
             </h2>
           </div>
           <button onClick={onClose} className="p-1 text-slate-400 hover:text-slate-200">
@@ -1091,59 +1279,232 @@ function AddEditTimerModal({ mvp, onClose, onSubmit }) {
               >
                 {MVP_DATABASE.map(m => (
                   <option key={m.id} value={m.id}>
-                    {m.name} ({m.map} - {m.respawnMinutes}m)
+                    {m.name} ({m.map} - {formatRespawnText(m.respawnMinutes)})
                   </option>
                 ))}
               </select>
             </div>
           )}
 
-          {/* Current MVP Preview Card */}
-          <div className="p-3 rounded-xl bg-slate-900/80 border border-slate-800 flex items-center gap-3">
-            <div dangerouslySetInnerHTML={{ __html: renderMvpAvatar(currentMvp) }} />
-            <div>
-              <p className="font-bold text-amber-300">{currentMvp.name}</p>
-              <p className="text-xs text-slate-400">{currentMvp.location} ({currentMvp.map})</p>
-              <p className="text-xs font-mono text-amber-500/80 mt-0.5">Respawn: {currentMvp.respawnMinutes} minutes</p>
+          {/* Current MVP Preview & Respawn Config */}
+          <div className="p-3 rounded-xl bg-slate-900/80 border border-slate-800 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div dangerouslySetInnerHTML={{ __html: renderMvpAvatar(currentMvp) }} />
+              <div>
+                <p className="font-bold text-amber-300">{currentMvp.name}</p>
+                <p className="text-xs text-slate-300 flex items-center gap-1.5 mt-0.5">
+                  <span>{currentMvp.location}</span>
+                  <span className="text-amber-400 font-mono font-bold bg-slate-950 px-1.5 py-0.2 rounded border border-amber-500/30">{currentMvp.map}</span>
+                </p>
+              </div>
+            </div>
+
+            {/* Custom Respawn Duration Input */}
+            <div className="text-right shrink-0">
+              <label className="text-[10px] font-mono text-slate-400 block">Respawn Cooldown</label>
+              <div className="flex items-center gap-1 justify-end mt-0.5">
+                <input
+                  type="number"
+                  min="1"
+                  max="1440"
+                  value={customRespawnMins}
+                  onChange={e => setCustomRespawnMins(parseInt(e.target.value, 10) || 1)}
+                  className="w-16 p-1 rounded bg-slate-950 border border-slate-700 font-mono text-xs text-amber-300 text-center font-bold"
+                />
+                <span className="text-xs font-mono text-slate-400">mins</span>
+              </div>
             </div>
           </div>
 
-          {/* Convex Mirror Time Remaining Input */}
-          <div className="space-y-1">
-            <label className="text-xs font-mono text-amber-300 flex items-center justify-between">
-              <span>Time Remaining shown by Convex Mirror (MM:SS)</span>
-              <span className="text-[10px] text-slate-400">e.g. 42:15</span>
-            </label>
-            <input
-              type="text"
-              placeholder="42:15 or 1:15:00"
-              value={timeInput}
-              onChange={e => {
-                setTimeInput(e.target.value);
+          {/* Mode Selection Tabs */}
+          <div className="flex items-center p-1 bg-slate-950 rounded-xl border border-slate-800">
+            <button
+              type="button"
+              onClick={() => {
+                setActiveTab('killed');
                 setErrorMsg("");
               }}
-              className="w-full p-3 rounded-xl bg-slate-900 border border-slate-700 font-mono text-lg text-amber-300 placeholder-slate-600 focus:outline-none focus:border-amber-500"
-              autoFocus
-            />
-            {errorMsg && <p className="text-xs text-red-400 font-mono">{errorMsg}</p>}
+              className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-1.5 ${
+                activeTab === 'killed'
+                  ? 'bg-amber-500 text-black shadow'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <Skull className="w-3.5 h-3.5" />
+              <span>When Was It Killed?</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setActiveTab('mirror');
+                setErrorMsg("");
+              }}
+              className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-1.5 ${
+                activeTab === 'mirror'
+                  ? 'bg-amber-500 text-black shadow'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <Clock className="w-3.5 h-3.5" />
+              <span>Convex Mirror Time</span>
+            </button>
           </div>
 
-          {/* Quick Preset Buttons */}
-          <div className="space-y-1">
-            <label className="text-[11px] text-slate-400 font-mono">Quick Presets</label>
-            <div className="grid grid-cols-4 gap-2">
-              {["5:00", "15:00", "30:00", "45:00"].map(preset => (
-                <button
-                  key={preset}
-                  type="button"
-                  onClick={() => setTimeInput(preset)}
-                  className="py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-mono text-amber-300 transition-colors"
-                >
-                  {preset}
-                </button>
-              ))}
+          {/* TAB 1: When was this killed? Input */}
+          {activeTab === 'killed' && (
+            <div className="space-y-3 bg-slate-900/60 p-4 rounded-xl border border-slate-800">
+              
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between text-xs">
+                  <label className="font-semibold text-amber-300">
+                    Exact time {currentMvp.name} was killed:
+                  </label>
+                  <span className="text-[11px] font-mono text-slate-400">
+                    Current Local Time: <strong className="text-amber-400">{formatClockTime(Date.now())}</strong>
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <input
+                    type="time"
+                    step="60"
+                    value={exactKillTime}
+                    onChange={e => {
+                      setExactKillTime(e.target.value);
+                      setErrorMsg("");
+                    }}
+                    className="p-3 rounded-xl bg-slate-950 border border-slate-700 font-mono text-xl text-amber-300 focus:outline-none focus:border-amber-500 flex-1"
+                    autoFocus
+                  />
+
+                  <input
+                    type="text"
+                    placeholder="or type 13:00 / 1:00 PM"
+                    value={exactKillTime}
+                    onChange={e => {
+                      setExactKillTime(e.target.value);
+                      setErrorMsg("");
+                    }}
+                    className="p-3 rounded-xl bg-slate-950 border border-slate-700 font-mono text-xs text-amber-300 placeholder-slate-600 focus:outline-none focus:border-amber-500 w-44"
+                  />
+                </div>
+              </div>
+
+              {/* Quick Presets for Exact Kill Time */}
+              <div className="space-y-1">
+                <label className="text-[10px] text-slate-400 font-mono">Quick Preset Times</label>
+                <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5">
+                  {quickTimePresets.map(preset => (
+                    <button
+                      key={preset.label}
+                      type="button"
+                      onClick={() => {
+                        setExactKillTime(preset.timeStr);
+                        setErrorMsg("");
+                      }}
+                      className="py-1.5 px-1 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-[11px] font-mono text-amber-300 transition-colors text-center"
+                      title={`Set kill time to ${preset.timeStr}`}
+                    >
+                      <span className="block font-bold">{preset.label}</span>
+                      <span className="text-[10px] text-slate-400 font-normal">{preset.timeStr}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Calculation Preview Box */}
+              {exactKillCalculation && (
+                <div className={`p-3.5 rounded-xl border text-xs font-mono space-y-2 transition-all ${
+                  exactKillCalculation.alreadySpawned
+                    ? 'bg-red-950/60 border-red-600 text-red-300'
+                    : 'bg-emerald-950/40 border-emerald-700/60 text-emerald-300'
+                }`}>
+                  <div className="flex items-center justify-between border-b border-emerald-500/20 pb-1">
+                    <span className="text-slate-400">Kill Time Recorded:</span>
+                    <strong className="text-amber-300">{formatClockTime(exactKillCalculation.killTimestamp)}</strong>
+                  </div>
+
+                  <div className="flex items-center justify-between">
+                    <span className="text-slate-300">Boss Cooldown Duration:</span>
+                    <span className="text-slate-200">{formatRespawnText(customRespawnMins)}</span>
+                  </div>
+
+                  <div className="flex items-center justify-between border-t border-emerald-500/20 pt-1 font-bold">
+                    <span className="text-emerald-400">Calculated Spawn Time:</span>
+                    <strong className="text-amber-300">{formatClockTime(exactKillCalculation.targetSpawnTimestamp)}</strong>
+                  </div>
+
+                  <div className="flex items-center justify-between font-bold text-sm pt-0.5">
+                    <span>Live Countdown Starts At:</span>
+                    <span className={exactKillCalculation.alreadySpawned ? 'text-red-400' : 'text-emerald-300'}>
+                      {exactKillCalculation.alreadySpawned ? '00:00:00 (SPAWN NOW!)' : formatMsRemaining(exactKillCalculation.remainingMs)}
+                    </span>
+                  </div>
+
+                  {exactKillCalculation.alreadySpawned && (
+                    <p className="text-[11px] text-red-400 font-bold mt-1 animate-pulse">
+                      ⚠️ MVP has already spawned! (Kill time + cooldown has passed)
+                    </p>
+                  )}
+                </div>
+              )}
+
             </div>
-          </div>
+          )}
+
+          {/* TAB 2: Convex Mirror Time Remaining Input */}
+          {activeTab === 'mirror' && (
+            <div className="space-y-3 bg-slate-900/60 p-4 rounded-xl border border-slate-800">
+              
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-amber-300 block">
+                  Time Remaining shown by Convex Mirror (MM:SS or HH:MM:SS)
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. 42:15 or 1:15:00"
+                  value={mirrorInput}
+                  onChange={e => {
+                    setMirrorInput(e.target.value);
+                    setErrorMsg("");
+                  }}
+                  className="w-full p-3 rounded-xl bg-slate-950 border border-slate-700 font-mono text-lg text-amber-300 placeholder-slate-600 focus:outline-none focus:border-amber-500"
+                  autoFocus
+                />
+              </div>
+
+              {/* Quick Presets for Convex Mirror */}
+              <div className="space-y-1">
+                <label className="text-[10px] text-slate-400 font-mono">Quick Presets</label>
+                <div className="grid grid-cols-4 gap-2">
+                  {["5:00", "15:00", "30:00", "45:00"].map(preset => (
+                    <button
+                      key={preset}
+                      type="button"
+                      onClick={() => setMirrorInput(preset)}
+                      className="py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-mono text-amber-300 transition-colors"
+                    >
+                      {preset}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Mirror Preview */}
+              {mirrorCalculation && (
+                <div className="p-3 rounded-xl bg-emerald-950/40 border border-emerald-700/60 text-xs font-mono text-emerald-300 flex items-center justify-between">
+                  <span>Countdown Start:</span>
+                  <strong className="text-amber-300 text-sm">
+                    {formatMsRemaining(mirrorCalculation.remainingMs)}
+                  </strong>
+                </div>
+              )}
+
+            </div>
+          )}
+
+          {errorMsg && <p className="text-xs text-red-400 font-mono">{errorMsg}</p>}
 
           {/* Submit & Cancel */}
           <div className="flex items-center gap-3 pt-2">
@@ -1158,67 +1519,11 @@ function AddEditTimerModal({ mvp, onClose, onSubmit }) {
               type="submit"
               className="w-1/2 py-2.5 rounded-xl gold-gradient-bg text-black font-bold text-xs shadow-lg hover:scale-[1.02] transition-transform"
             >
-              Start Countdown
+              Start Timer
             </button>
           </div>
 
         </form>
-
-      </div>
-    </div>
-  );
-}
-
-/**
- * Map Preview Modal
- */
-function MapPreviewModal({ mvp, onClose }) {
-  const [copiedWarp, setCopiedWarp] = useState(false);
-  const warpCmd = `@warp ${mvp.map} ${mvp.coordinates.replace(',', '')}`;
-
-  const handleCopyWarp = () => {
-    navigator.clipboard.writeText(warpCmd);
-    setCopiedWarp(true);
-    setTimeout(() => setCopiedWarp(false), 2000);
-  };
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in">
-      <div className="relative w-full max-w-lg rounded-2xl ro-card p-6 border-2 border-amber-500/50 bg-[#0b0f19] shadow-2xl space-y-4">
-        
-        {/* Header */}
-        <div className="flex items-center justify-between border-b border-amber-500/30 pb-3">
-          <div className="flex items-center gap-2">
-            <MapPin className="w-5 h-5 text-amber-400" />
-            <div>
-              <h2 className="text-base font-bold text-amber-300">{mvp.location}</h2>
-              <p className="text-xs font-mono text-slate-400">{mvp.map} • Coordinates: ({mvp.coordinates})</p>
-            </div>
-          </div>
-          <button onClick={onClose} className="p-1 text-slate-400 hover:text-slate-200">
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-
-        {/* Map Preview Graphic */}
-        <div className="relative w-full aspect-square rounded-xl overflow-hidden border border-amber-500/30 shadow-inner">
-          <div dangerouslySetInnerHTML={{ __html: renderMapSvg(mvp.map, mvp.name, mvp.coordinates, true) }} />
-        </div>
-
-        {/* Teleport / Warp Command Box */}
-        <div className="p-3 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-between">
-          <div>
-            <p className="text-[10px] font-mono text-slate-400 uppercase tracking-wider">In-Game Teleport Command</p>
-            <p className="text-xs font-mono text-amber-300 font-bold">{warpCmd}</p>
-          </div>
-          <button
-            onClick={handleCopyWarp}
-            className="px-3 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-300 text-xs font-semibold flex items-center gap-1 transition-colors"
-          >
-            <Copy className="w-3.5 h-3.5" />
-            <span>{copiedWarp ? 'Copied!' : 'Copy Warp'}</span>
-          </button>
-        </div>
 
       </div>
     </div>
@@ -1263,7 +1568,7 @@ function MvpDatabaseModal({ onClose, onSelectMvp }) {
           <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
             type="text"
-            placeholder="Search database by name, map, element, race..."
+            placeholder="Search database by name, map (e.g. prt_sewb1), element, race..."
             value={dbSearch}
             onChange={e => setDbSearch(e.target.value)}
             className="w-full pl-9 pr-4 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-amber-500"
@@ -1281,14 +1586,16 @@ function MvpDatabaseModal({ onClose, onSelectMvp }) {
                 <div dangerouslySetInnerHTML={{ __html: renderMvpAvatar(mvp) }} />
                 <div>
                   <h3 className="font-bold text-amber-300 text-base">{mvp.name}</h3>
-                  <p className="text-xs text-slate-300">{mvp.location} <span className="text-amber-400 font-mono">({mvp.map})</span></p>
+                  <p className="text-xs text-slate-300 flex items-center gap-1.5 mt-0.5">
+                    <span>{mvp.location}</span>
+                    <span className="text-amber-400 font-mono font-bold bg-slate-950 px-2 py-0.5 rounded border border-amber-500/30">{mvp.map}</span>
+                  </p>
                   
                   <div className="flex items-center gap-2 mt-1 flex-wrap text-xs font-mono text-slate-400">
                     <span>HP: <strong className="text-slate-200">{mvp.hp?.toLocaleString() || 'N/A'}</strong></span>
-                    <span>Respawn: <strong className="text-slate-200">{mvp.respawnMinutes}m</strong></span>
+                    <span>Respawn: <strong className="text-slate-200">{formatRespawnText(mvp.respawnMinutes)}</strong></span>
                     <span>Element: <strong className="text-slate-200">{mvp.element}</strong></span>
                     <span>Race: <strong className="text-slate-200">{mvp.race}</strong></span>
-                    <span>Size: <strong className="text-slate-200">{mvp.size}</strong></span>
                   </div>
                 </div>
               </div>
